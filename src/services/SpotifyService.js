@@ -1,7 +1,8 @@
 import axios from "axios";
-import QueueService from "./queue.js";
+import QueueService from "./QueueService.js";
 import TrackModelService from "./db/TrackModelService.js";
 import HistoryModelService from "./db/HistoryModelService.js";
+import { log } from "../utils/logger.js";
 
 class SpotifyService {
   constructor() {
@@ -29,14 +30,18 @@ class SpotifyService {
         },
       );
       this.token = response.data.access_token;
-      console.log("Authenticated with Spotify API");
+      log("info", "Authenticated with Spotify API", this.constructor.name);
     } catch (error) {
       throw new Error("Failed to authenticate with Spotify API:", error);
     }
   }
 
   _extractMetadata(spotifyTrackMetadata) {
-    console.log("Extracting metadata for:", spotifyTrackMetadata.name);
+    log(
+      "info",
+      `Extracting metadata for: ${spotifyTrackMetadata.name}`,
+      this.constructor.name,
+    );
     return {
       trackId: spotifyTrackMetadata.id,
       title: spotifyTrackMetadata.name,
@@ -50,7 +55,11 @@ class SpotifyService {
   }
 
   async _getArtistGenres(artistId) {
-    console.log("Getting genres for artist:", artistId);
+    log(
+      "info",
+      `Getting genres for artist: ${artistId}`,
+      this.constructor.name,
+    );
     try {
       const artistResponse = await axios.get(
         `${this._baseUrl}/artists/${artistId}`,
@@ -68,7 +77,7 @@ class SpotifyService {
 
   async searchTrack(query) {
     try {
-      console.log("Searching for track:", query);
+      log("info", `Searching for track: ${query}`, this.constructor.name);
       const response = await axios.get(`${this._baseUrl}/search`, {
         headers: {
           Authorization: `Bearer ${this.token}`,
@@ -133,7 +142,11 @@ class SpotifyService {
   }
 
   async _getUrlForAllPlatforms(trackUrl) {
-    console.log("Getting other platform links for:", trackUrl);
+    log(
+      "info",
+      `Getting other platform links for: ${trackUrl}`,
+      this.constructor.name,
+    );
     try {
       const response = await axios.get(
         `https://api.song.link/v1-alpha.1/links?url=${trackUrl}`,
@@ -172,7 +185,7 @@ class SpotifyService {
   }
 
   async getTrackData(trackId) {
-    console.log("Getting track data from spotify for:", trackId);
+    log("info", `Getting track data for: ${trackId}`, this.constructor.name);
     try {
       const response = await axios.get(`${this._baseUrl}/tracks/${trackId}`, {
         headers: {
@@ -188,7 +201,7 @@ class SpotifyService {
         await this._authenticate();
         return this.getTrackData(trackId);
       }
-      console.log("Failed to get track data:", error);
+      log("error", `Failed to get track data: ${error}`, this.constructor.name);
     }
   }
 

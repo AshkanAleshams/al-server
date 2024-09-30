@@ -1,11 +1,8 @@
-/* eslint-disable no-constant-condition */
-import ClientService from "../client/ClientService.js";
-import StreamClient from "../client/StreamClient.js";
-import SpotifyService from "../services/spotify.js";
-import QueueService from "../services/queue.js";
-import OpenAIService from "../services/openai.js";
+import SpotifyService from "../services/SpotifyService.js";
+import QueueService from "../services/QueueService.js";
+import OpenAIService from "../services/OpenAiService.js";
 import TrackModelService from "../services/db/TrackModelService.js";
-import ProxyService from "../services/proxy.js";
+import ProxyService from "../services/ProxyService.js";
 
 import { EndableError } from "../errors.js";
 
@@ -15,11 +12,12 @@ import ffprobe from "ffprobe";
 import ffprobeStatic from "ffprobe-static";
 import { exec } from "child_process";
 import { promisify } from "util";
-import EventEmitter from "events";
+import ClientManager from "../client/ClientManager.js";
+import { log } from "../utils/logger.js";
+import EventService from "../services/EventService.js";
 
-class SongController extends EventEmitter {
+class SongController {
   constructor() {
-    super();
     this.songPlaying = false;
     this.currentSongMetadata = {};
     this.songDownloading = false;
@@ -27,29 +25,35 @@ class SongController extends EventEmitter {
   }
 
   initialize() {
+    log("info", "Initializing Song Controller", this.constructor.name);
     // Event listeners for the song player
-    QueueService.on("songQueued", () => this._player());
-    StreamClient.on("clientConnected", () => this._player());
-    this.on("songEnded", () => this._player());
+    EventService.onWithServerContext("songQueued", () => this._player());
+    EventService.onWithServerContext("clientConnected", () => this._player());
+    EventService.onWithServerContext("songEnded", () => this._player());
 
     // Event listeners for the song gatherer
-    this.on("notDownloading", () => this._songGatherer());
-    QueueService.on("audioQueueNeedsFilling", () => this._songGatherer());
+    EventService.onWithServerContext("notDownloading", () =>
+      this._songGatherer(),
+    );
+    EventService.onWithServerContext("audioQueueNeedsFilling", () =>
+      this._songGatherer(),
+    );
+
     this._songGatherer();
   }
 
   // The song player. it takes the existing audio file and streams it to the clients.
   async _player() {
+    log("info", "Song player triggered", this.constructor.name);
     if (
       this.songPlaying ||
-      !ClientService.hasActiveClients() ||
+      !ClientManager.hasActiveClients() ||
       QueueService.isAudioQueueEmpty()
     ) {
-      console.log(
-        "Song player not ready:",
-        this.songPlaying,
-        !ClientService.hasActiveClients(),
-        QueueService.isAudioQueueEmpty(),
+      log(
+        "info",
+        `Song player not ready. Song Playing? ${this.songPlaying} Active Clients? ${ClientManager.hasActiveClients()} Audio Queue Empty? ${QueueService.isAudioQueueEmpty()}`,
+        this.constructor.name,
       );
       return;
     }
@@ -62,25 +66,33 @@ class SongController extends EventEmitter {
 
   // The song gatherer. it gets the next song from the queue and downloads it.
   async _songGatherer() {
+    log("info", "Song Gatherer triggered", this.constructor.name);
     if (this.songDownloading || !QueueService.audioQueueNeedsFilling()) {
-      console.log(
-        "Song gatherer not ready:",
-        this.songDownloading,
-        !QueueService.audioQueueNeedsFilling(),
+      log(
+        "info",
+        `Song Gatherer not ready. Song Downloading? ${this.songDownloading} Audio Queue Needs Filling? ${QueueService.audioQueueNeedsFilling()}`,
+        this.constructor.name,
       );
       return;
     }
 
-    console.log("Gathering next song");
     let { trackId, userSubmittedId, requestId } =
       await QueueService.popNextTrack();
-    console.log("Next song in queue:", trackId, userSubmittedId, requestId);
     if (!trackId) {
-      console.log("No more songs in queue. Populating suggestion queue.");
+      log(
+        "info",
+        "No more songs in queue. Populating suggestion queue.",
+        this.constructor.name,
+      );
       await SpotifyService.populateSuggestionQueue();
       ({ trackId, userSubmittedId, requestId } =
         await QueueService.popNextTrack());
     }
+    log(
+      "info",
+      `Next song in queue: ${trackId} ${userSubmittedId} ${requestId}`,
+      this.constructor.name,
+    );
 
     this._setStateDownloading(trackId);
 
@@ -99,8 +111,12 @@ class SongController extends EventEmitter {
         // something real bad happened, it will happen again. end the program
         throw error;
       }
-      console.error("Error getting next song:", error.message);
-      console.log("Skipping song:", trackId);
+      log(
+        "error",
+        `Error getting next song: ${error.message}`,
+        this.constructor.name,
+      );
+      log("warn", `Skipping song: ${trackId}`, this.constructor.name);
       await QueueService.markSongAsFailed(trackId, requestId);
     }
 
@@ -110,15 +126,13 @@ class SongController extends EventEmitter {
   _setStateDownloading(trackId) {
     this.songDownloading = true;
     this.songDownloadingTrackId = trackId;
-    this.emit("downloading");
-    console.log("State set to downloading:", trackId);
+    EventService.emit("downloading");
   }
 
   _setStateNotDownloading() {
     this.songDownloading = false;
     this.songDownloadingTrackId = null;
-    this.emit("notDownloading");
-    console.log("State set to not downloading");
+    EventService.emit("notDownloading");
   }
 
   async _markSongAsPlayed(metadata) {
@@ -128,24 +142,16 @@ class SongController extends EventEmitter {
       metadata.trackId,
       metadata.requestId,
     );
-    console.log(
-      "Playing song",
-      metadata.title,
-      " - ",
-      metadata.artist,
-      "from",
-      metadata.userSubmittedId,
+    log(
+      "info",
+      `Playing song ${metadata.title} - ${metadata.artist} from ${metadata.userSubmittedId}`,
+      this.constructor.name,
     );
-    new Promise((resolve) => {
-      setTimeout(() => {
-        this.emit("currentSongMetadataUpdated", metadata);
-        resolve();
-      }, 5000);
-    });
+    EventService.emit("songStarted", metadata);
   }
 
   _writeDataToClients(data) {
-    ClientService._clients.forEach((client) => client.write(data));
+    ClientManager._clients.forEach((client) => client.write(data));
   }
 
   async _getBitrateFromAudioFile(path) {
@@ -163,7 +169,7 @@ class SongController extends EventEmitter {
     const handleForceStop = () => {
       throttle.end();
     };
-    this.on("forceStopSong", handleForceStop);
+    EventService.onWithServerContext("forceStopSong", handleForceStop);
 
     throttle
       .on("data", (data) => {
@@ -172,9 +178,9 @@ class SongController extends EventEmitter {
       .on("end", () => {
         readable.close();
         this.songPlaying = false;
-        this.removeListener("forceStopSong", handleForceStop);
-        console.log("Song ended");
-        this.emit("songEnded");
+        this.currentSongMetadata = {};
+        EventService.removeListener("forceStopSong", handleForceStop);
+        EventService.emit("songEnded");
         fs.unlinkSync(path);
       });
 
@@ -244,20 +250,28 @@ class SongController extends EventEmitter {
     for (let failCount = 1; failCount <= 10; failCount++) {
       try {
         await ProxyService.setProxy();
-        console.log("Downloading track from:", url);
+        log("info", `Downloading track from: ${url}`, this.constructor.name);
         await execAsync(command, { timeout: 30000 });
 
         if (fs.existsSync(filePath)) {
-          console.log("Downloaded track!");
+          log("info", "Downloaded track!", this.constructor.name);
           return filePath;
         }
       } catch (error) {
-        console.error("Error downloading track:", error);
+        log(
+          "error",
+          `Error downloading track: ${error}`,
+          this.constructor.name,
+        );
       }
 
       // Failed, remove files and try again
       ProxyService.markActiveProxyBad();
-      console.error("Failed to download track:", url, "Retry:", failCount);
+      log(
+        "warn",
+        `Failed to download track: ${url} Retry: ${failCount}`,
+        this.constructor.name,
+      );
       fs.readdirSync("./audio").forEach((file) => {
         if (file.includes(fileName)) {
           fs.unlinkSync(`./audio/${file}`);
@@ -277,7 +291,7 @@ class SongController extends EventEmitter {
   }
 
   skipCurrentSong() {
-    this.emit("forceStopSong");
+    EventService.emit("forceStopSong");
   }
 }
 

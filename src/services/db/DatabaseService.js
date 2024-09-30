@@ -1,9 +1,10 @@
 import mongoose from "mongoose";
+import { log } from "../../utils/logger.js";
 
 class DatabaseService {
   constructor() {
     this._mongoUri = process.env.MONGO_URI;
-    this._dbName = "ALsDB";
+    this._dbName = process.env.ENVIRONMENT === "prod" ? "ALsDB" : "ALsDB-stage";
   }
 
   async initialize() {
@@ -15,9 +16,18 @@ class DatabaseService {
       await mongoose.connect(this._mongoUri, {
         dbName: this._dbName,
       });
-      console.log(`Mongoose connected to ${this._dbName}`);
+      log(
+        "info",
+        `Mongoose connected to ${this._dbName}`,
+        this.constructor.name,
+      );
     } catch (error) {
-      console.error("Error connecting to MongoDB with Mongoose:", error);
+      log(
+        "error",
+        "Error connecting to MongoDB with Mongoose:",
+        error,
+        this.constructor.name,
+      );
     }
   }
 }

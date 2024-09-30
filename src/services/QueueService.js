@@ -1,8 +1,8 @@
-import { EventEmitter } from "events";
 import RequestModelService from "./db/RequestModelService.js";
-class QueueService extends EventEmitter {
+import { log } from "../utils/logger.js";
+import EventService from "./EventService.js";
+class QueueService {
   constructor() {
-    super();
     // Format: [{trackId: "trackId1", userSubmittedId: null}, ...]
     this._autoSuggestionQueue = [];
     // Format: [{path: "path/to/audio/file", metadata: {trackid: '...', userSubmittedId: 'greg'}}, ...]
@@ -18,7 +18,11 @@ class QueueService extends EventEmitter {
   addToSuggestionQueue(trackId) {
     if (this._autoSuggestionQueue.length < 5) {
       this._autoSuggestionQueue.push({ trackId, userSubmittedId: null });
-      console.log("Added trackId", trackId, "to suggestion queue");
+      log(
+        "info",
+        `Added trackId ${trackId} to suggestion queue`,
+        this.constructor.name,
+      );
       return true;
     }
     return false;
@@ -36,21 +40,18 @@ class QueueService extends EventEmitter {
 
   addToAudioQueue(audioFile) {
     this._audioQueue.push(audioFile);
-    this.emit("songQueued");
-    console.log(
-      "Added audio file",
-      audioFile.metadata?.title,
-      " - ",
-      audioFile.metadata?.artist,
-      "to audio queue",
+    EventService.emit("songQueued");
+    log(
+      "info",
+      `Added audio file ${audioFile.metadata.title} - ${audioFile.metadata.artist} to audio queue`,
+      this.constructor.name,
     );
   }
 
   popNextAudioFile() {
     const file = this._audioQueue.shift();
     if (this.audioQueueNeedsFilling()) {
-      console.log("Audio queue needs filling");
-      this.emit("audioQueueNeedsFilling");
+      EventService.emit("audioQueueNeedsFilling");
     }
     return file;
   }

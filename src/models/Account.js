@@ -13,12 +13,27 @@ const AccountSchema = new mongoose.Schema({
   isEmailVerified: { type: Boolean, default: false },
   isOnline: { type: Boolean, default: false },
   lastOnline: { type: Date, default: Date.now },
-  linkedServices: { type: Map, of: String }, // e.g., { spotify: url, appleMusic: url }
   location: { type: String, default: "" },
   numberOfSongsListened: { type: Number, default: 0 },
   passwordHash: { type: String, required: true },
   role: { type: String, default: "user" },
-  serviceTokens: { type: Map, of: String }, // e.g., { spotify: token, appleMusic: token }
+
+  // LastFM
+  lastFMUsername: { type: String, default: "" },
+  lastFMToken: { type: String, default: "" },
+
+  // Spotify
+  spotifyUserId: { type: String, default: "" },
+  spotifyDisplayName: { type: String, default: "" },
+  spotifyAccessToken: { type: String, default: "" },
+  spotifyRefreshToken: { type: String, default: "" },
+  spotifyTokenExpiration: { type: Date, default: Date.now },
+  spotifyQuickAddPlaylistId: { type: String, default: "" },
+
+  // Apple Music
+  appleMusicIsConnected: { type: Boolean, default: false },
+  appleMusicToken: { type: String, default: "" },
+  appleMusicQuickAddPlaylistId: { type: String, default: "" },
 });
 
 const Account = mongoose.model("Account", AccountSchema);
