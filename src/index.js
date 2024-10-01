@@ -15,9 +15,23 @@ import ClientManager from "./client/ClientManager.js";
 import { runWithContext, getContext } from "./utils/asyncLocalStorage.js";
 import { generateTaskId, log, logFullContext } from "./utils/logger.js";
 import EventService from "./services/EventService.js";
+import fs from "fs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const audioDir = path.join(__dirname, "..", "audio");
+if (!fs.existsSync(audioDir)) {
+  fs.mkdirSync(audioDir, { recursive: true });
+}
+fs.readdir(audioDir, (err, files) => {
+  if (err) throw err;
+  for (const file of files) {
+    fs.unlink(path.join(audioDir, file), (err) => {
+      if (err) throw err;
+    });
+  }
+});
 
 const corsOptions = {
   origin: process.env.CLIENT_URL || "*",

@@ -5,10 +5,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "setup-audio": "mkdir audio && rmdir /S /Q audio && mkdir audio",
-    "start:local": "npm run setup-audio && node --expose-gc --env-file=.env.local src/index.js",
-    "start": "npm run setup-audio && node --expose-gc --optimize_for_size --max_old_space_size=460 src/index.js",
-    "mongo:local": "mkdir db && \"C:\\Program Files\\MongoDB\\Server\\<version>\\bin\\mongod.exe\" --dbpath db --port 28017",
+    "start:local": "node --expose-gc --env-file=.env src/index.js",
+    "start": "node --expose-gc --optimize_for_size --max_old_space_size=460 src/index.js",
+    "mongo": "shx mkdir -p db && mongod --dbpath db --port 28017",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write \"**/*.{js,json,css,md}\""
@@ -48,6 +47,7 @@
     "eslint-plugin-prettier": "^5.2.1",
     "globals": "^15.9.0",
     "npm-run-all": "^4.1.5",
-    "prettier": "^3.3.3"
+    "prettier": "^3.3.3",
+    "shx": "^0.3.4"
   }
 }
